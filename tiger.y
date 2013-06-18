@@ -5,7 +5,7 @@
 using namespace std;
 
 extern node* root;
-extern int yylex();
+int yylex();
 void yyerror(const char *s) { std::printf("Error: %s\n", s);std::exit(1); }
 %}
 
@@ -23,6 +23,7 @@ void yyerror(const char *s) { std::printf("Error: %s\n", s);std::exit(1); }
 	Tyfields t_tyfields;
 	Id t_id;
 	Exp t_exp;
+	char* str;
 	int token;
 }
 
@@ -39,11 +40,13 @@ void yyerror(const char *s) { std::printf("Error: %s\n", s);std::exit(1); }
 %type <t_ty> ty
 %type <t_tyfields> tyfields
 %type <t_id> id
-%type <token> ID NIL STRINGT INTEGERT BREAK
+%token <token> ID STRINGT
+%token <token> INTEGERT
+%token <token> NIL BREAK
 
-%token		ARRAY IF THEN ELSE WHILE FOR TO DO LET IN END OF BREAK NIL FUNCTION VAR TYPE ERROR
-			COMMA COLON SEMICOLON LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE 
-			DOT PLUS MINUS STAR SLASH EQ NEQ GT GE LT LE AND OR ASSIGN INTEGERT STRINGT ID
+%token <token>	ARRAY IF THEN ELSE WHILE FOR TO DO LET IN END OF FUNCTION VAR TYPE ERROR
+				COMMA COLON SEMICOLON LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE 
+				DOT PLUS MINUS STAR SLASH EQ NEQ GT GE LT LE AND OR ASSIGN
 
 %nonassoc	ASSIGN
 %nonassoc	LOWER_THAN_OP

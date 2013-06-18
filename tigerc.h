@@ -32,8 +32,9 @@ struct node {
 	vector<node*> childs;
 	node() {}
 	node(const string s) { comment = s; }
+	node(const string* s) { comment = *s; }
 	node(const char* s) { comment = string(s); }
-	node(const int token) { comment = "token"; }
+	node(const int token) { ostringstream ost; ost << "Token" << token; comment = ost.str(); }
 	void add(node* s) { childs.push_back(s); }
 };
 	
