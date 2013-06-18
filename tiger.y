@@ -108,9 +108,9 @@ exp			: NIL { $$ = new node($1); }
 			| INTEGERT { $$ = new node($1); }
 			| STRINGT { $$ = new node($1); }
 			| lvalue { $$ = $1; }
-			| id array OF exp %prec HIGHER_THAN_OP
-			| id LBRACE fields RBRACE
-			| id LPAREN params RPAREN
+			| id array OF exp %prec HIGHER_THAN_OP { $$ = new node("constarr"); Lvalue n = new node("op[]"); n->add($1); n->add($2); $$->add(n); $$->add($4); }
+			| id LBRACE fields RBRACE { $$ = new node("fields"); $$->add($1); $$->add($3); }
+			| id LPAREN params RPAREN { $$ = new node("params"); $$->add($1); $$->add($3); }
 			| MINUS exp %prec UMINUS { $$ = new node("-"); $$->add($2); }
 			| exp PLUS exp { $$ = new node("+"); $$->add($1); $$->add($3); }
 			| exp MINUS exp { $$ = new node("-"); $$->add($1); $$->add($3); }
@@ -124,14 +124,14 @@ exp			: NIL { $$ = new node($1); }
 			| exp GE exp { $$ = new node(">="); $$->add($1); $$->add($3); }
 			| exp AND exp { $$ = new node("&"); $$->add($1); $$->add($3); }
 			| exp OR exp { $$ = new node("|"); $$->add($1); $$->add($3); }
-			| LPAREN exps RPAREN
-			| lvalue ASSIGN exp
-			| IF exp THEN exp %prec LOWER_THAN_ELSE
-			| IF exp THEN exp ELSE exp
-			| WHILE exp DO exp %prec HIGHER_THAN_OP
-			| FOR id ASSIGN exp TO exp DO exp %prec HIGHER_THAN_OP
+			| LPAREN exps RPAREN { $$ = new node("paren"); $$->add($2); }
+			| lvalue ASSIGN exp { $$ = new node("assign"); $$->add($1); $$->add($3); }
+			| IF exp THEN exp %prec LOWER_THAN_ELSE { $$ = new node("if"); $$->add($2); $$->add($4); }
+			| IF exp THEN exp ELSE exp { $$ = new node("if-else"); $$->add($2); $$->add($4); $$->add($6); }
+			| WHILE exp DO exp %prec HIGHER_THAN_OP { $$ = new node("while"); $$->add($2); $$->add($4); }
+			| FOR id ASSIGN exp TO exp DO exp %prec HIGHER_THAN_OP { $$ = new node("for"); Exp n = new node("cond"); n->add($2); n->add($4); n->add($6); $$->add(n); $$->add($8); }
 			| BREAK { $$ = new node($1); }
-			| LET decs IN exps END
+			| LET decs IN exps END { $$ = new node("block"); $$->add($2); $$->add($4); }
 			;
 
 %%
