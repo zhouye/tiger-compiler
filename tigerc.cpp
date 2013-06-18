@@ -20,7 +20,7 @@ void preorder(node* n, int dep)
 
 void orz(char* c)
 {
-	printf("Orz!");
+	printf("%s", c);
 	fflush(stdout);
 }
 

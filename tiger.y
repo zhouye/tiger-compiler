@@ -6,7 +6,16 @@ using namespace std;
 
 extern node* root;
 int yylex();
-void yyerror(const char *s) { std::printf("Error: %s\n", s);std::exit(1); }
+extern int lineno;
+extern char *yytext;
+
+/* parse error */
+void yyerror ( const char* s ) {
+	printf("\n*** %s (line : %d, token: '%s')\n",
+         s, lineno + 1, yytext);
+	exit(1);
+}
+
 %}
 
 %union {
@@ -40,13 +49,11 @@ void yyerror(const char *s) { std::printf("Error: %s\n", s);std::exit(1); }
 %type <t_ty> ty
 %type <t_tyfields> tyfields
 %type <t_id> id
-%token <token> ID STRINGT
-%token <token> INTEGERT
-%token <token> NIL BREAK
 
 %token <token>	ARRAY IF THEN ELSE WHILE FOR TO DO LET IN END OF FUNCTION VAR TYPE ERROR
 				COMMA COLON SEMICOLON LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE 
 				DOT PLUS MINUS STAR SLASH EQ NEQ GT GE LT LE AND OR ASSIGN
+				ID STRINGT INTEGERT NIL BREAK
 
 %nonassoc	ASSIGN
 %nonassoc	LOWER_THAN_OP
@@ -105,11 +112,11 @@ ty			: id { $$ = $1; }
 tyfields	: id COLON id { $$ = new node("fields"); Tyfields n = new node("type"); n->add($1); n->add($3); $$->add(n); }
 			| tyfields COMMA id COLON id { $$ = $1; Tyfields n = new node("type"); n->add($3); n->add($5); $$->add(n); }
 			;
-id			: ID { $$ = new node($1); }
+id			: ID { $$ = new node(yytext); }
 			;
 exp			: NIL { $$ = new node($1); }
-			| INTEGERT { $$ = new node($1); }
-			| STRINGT { $$ = new node($1); }
+			| INTEGERT { $$ = new node(yytext); }
+			| STRINGT { $$ = new node(yytext); }
 			| lvalue { $$ = $1; }
 			| id array OF exp %prec HIGHER_THAN_OP { $$ = new node("constarr"); Lvalue n = new node("op[]"); n->add($1); n->add($2); $$->add(n); $$->add($4); }
 			| id LBRACE fields RBRACE { $$ = new node("fields"); $$->add($1); $$->add($3); }
