@@ -90,7 +90,7 @@
 
 \"[^\"]*\" {
   if(yyleng>257){
-    yyerror("String too long.\n");
+    yyerror("String too long");
     return ERROR;
   }
 
@@ -116,7 +116,7 @@
 			                   yytext[i+1]=='\\' || yytext[i+1]=='"' )) 
 	    i=i+2;
 	  else
-	    yyerror("Invalid escape sequence.\n");
+	    yyerror("Invalid escape sequence");
 	}
 	else
 	  i++;
@@ -125,13 +125,13 @@
 }
 
 \"[^\"]* {
-  yyerror("Unclosed string.\n");
+  yyerror("Unclosed string");
   return 0;
 }
 
 [a-zA-Z][a-zA-Z_0-9]*|"_main" {
   if(yyleng>255){
-    yyerror("Identifier too long.\n");
+    yyerror("Identifier too long");
     return ERROR;
   }
   return ID;
@@ -139,7 +139,7 @@
 
 [0-9]+ {
   if(yyleng>10||(yyleng==10&&(strcmp(yytext,"2147483647")>0))){
-    yyerror("Integer out of range.\n");
+    yyerror("Integer out of range");
     return ERROR;                  
   } 
   return INTEGERT;
@@ -148,7 +148,7 @@
 <<EOF>> return 0;
 
 . {
-    yyerror("UnrecogChar.\n");
+    yyerror("Unrecognized Character");
   }
 
 %%

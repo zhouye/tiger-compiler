@@ -2,7 +2,7 @@
 #include "y.tab.h"
 #include <stdio.h>
 
-int lineno = 0;
+int lineno = 1;
 node* root;
 
 void preorder(node* n, int dep)

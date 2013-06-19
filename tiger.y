@@ -11,8 +11,8 @@ extern char *yytext;
 
 /* parse error */
 void yyerror ( const char* s ) {
-	printf("\n*** %s (line : %d, token: '%s')\n",
-         s, lineno + 1, yytext);
+	printf("%s in line %d at '%s'\n", s,
+         lineno , yytext);
 	exit(1);
 }
 
