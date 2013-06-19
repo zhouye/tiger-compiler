@@ -30,6 +30,7 @@ using namespace std;
 struct node {
 	string comment;
 	vector<node*> childs;
+	Value* v;
 	node() {}
 	node(const string s) { comment = s; }
 	node(const string* s) { comment = *s; }

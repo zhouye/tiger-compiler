@@ -8,6 +8,7 @@ extern node* root;
 int yylex();
 extern int lineno;
 extern char *yytext;
+extern IRBuilder<>* b;
 
 /* parse error */
 void yyerror ( const char* s ) {
@@ -85,14 +86,14 @@ params		: { $$ = new node("params"); }
 array		: LBRACKET exp RBRACKET { $$ = $2; }
 			| array LBRACKET exp RBRACKET { $$ = new node("op[]"); $$->add($1); $$->add($3); }
 			;
-lvalue		: id { $$ = new node("lvalue"); $$->add($1); }
+lvalue		: id { $$ = new node("lvalue"); $$->add($1); $$->v = $1->v; }
 			| id array { $$ = new node("op[]"); $$->add($1); $$->add($2); }
 			| lvalue DOT id { $$ = new node("DOT"); $$->add($1); $$->add($3);}
 			| lvalue DOT id array { $$ = new node("op[]"); Lvalue n = new node("DOT"); n->add($1); n->add($3); $$->add(n); $$->add($3); }
 			;
-exps		: exps SEMICOLON exp { $$ = $1; $$->add($3); }
-			| exp { $$ = new node("exps"); $$->add($1); }
-			| { $$ = new node("exps"); }
+exps		: exps SEMICOLON exp { $$ = $1; $$->add($3); $$->v = $3->v; }
+			| exp { $$ = new node("exps"); $$->add($1); $$->v = $1->v; }
+			| { $$ = new node("exps"); $$->v = 0; }
 			;
 decs		: { $$ = new node("decs"); }
 			| decs dec { $$ = $1; $1->add($2); }
@@ -109,39 +110,40 @@ ty			: id { $$ = $1; }
 			| LBRACE tyfields RBRACE { $$ = $2; }
 			| ARRAY OF id { $$ = new node("arrayof"); $$->add($3); }
 			;
-tyfields	: id COLON id { $$ = new node("fields"); Tyfields n = new node("type"); n->add($1); n->add($3); $$->add(n); }
+tyfields	: { $$ = new node("fields");  }
+			| id COLON id { $$ = new node("fields"); Tyfields n = new node("type"); n->add($1); n->add($3); $$->add(n); }
 			| tyfields COMMA id COLON id { $$ = $1; Tyfields n = new node("type"); n->add($3); n->add($5); $$->add(n); }
 			;
-id			: ID { $$ = new node(yytext); }
+id			: ID { $$ = new node(yytext); $$->v = b->CreateAlloca(b->getInt32Ty(), 0, yytext); }
 			;
-exp			: NIL { $$ = new node($1); }
-			| INTEGERT { $$ = new node(yytext); }
-			| STRINGT { $$ = new node(yytext); }
-			| lvalue { $$ = $1; }
+exp			: NIL { $$ = new node($1); $$->v = 0; }
+			| INTEGERT { $$ = new node(yytext); $$->v = ConstantInt::get(b->getInt32Ty(), atoi(yytext), true); }
+			| STRINGT { $$ = new node(yytext); string s = yytext; $$->v = b->CreateGlobalStringPtr(s.substr(1, s.length()-2)); }
+			| lvalue { $$ = $1; $$->v = $1->v; }
 			| id array OF exp %prec HIGHER_THAN_OP { $$ = new node("constarr"); Lvalue n = new node("op[]"); n->add($1); n->add($2); $$->add(n); $$->add($4); }
 			| id LBRACE fields RBRACE { $$ = new node("fields"); $$->add($1); $$->add($3); }
-			| id LPAREN params RPAREN { $$ = new node("params"); $$->add($1); $$->add($3); }
+			| id LPAREN params RPAREN { $$ = new node("call"); $$->add($1); $$->add($3); }
 			| MINUS exp %prec UMINUS { $$ = new node("-"); $$->add($2); }
-			| exp PLUS exp { $$ = new node("+"); $$->add($1); $$->add($3); }
-			| exp MINUS exp { $$ = new node("-"); $$->add($1); $$->add($3); }
-			| exp STAR exp { $$ = new node("*"); $$->add($1); $$->add($3); }
-			| exp SLASH exp { $$ = new node("/"); $$->add($1); $$->add($3); }
-			| exp EQ exp { $$ = new node("="); $$->add($1); $$->add($3); }
-			| exp NEQ exp { $$ = new node("<>"); $$->add($1); $$->add($3); }
-			| exp LT exp { $$ = new node("<"); $$->add($1); $$->add($3); }
-			| exp GT exp { $$ = new node(">"); $$->add($1); $$->add($3); }
-			| exp LE exp { $$ = new node("<="); $$->add($1); $$->add($3); }
-			| exp GE exp { $$ = new node(">="); $$->add($1); $$->add($3); }
-			| exp AND exp { $$ = new node("&"); $$->add($1); $$->add($3); }
-			| exp OR exp { $$ = new node("|"); $$->add($1); $$->add($3); }
-			| LPAREN exps RPAREN { $$ = new node("paren"); $$->add($2); }
-			| lvalue ASSIGN exp { $$ = new node("assign"); $$->add($1); $$->add($3); }
+			| exp PLUS exp { $$ = new node("+"); $$->add($1); $$->add($3); $$->v = b->CreateAdd($1->v, $3->v); }
+			| exp MINUS exp { $$ = new node("-"); $$->add($1); $$->add($3); $$->v = b->CreateSub($1->v, $3->v); }
+			| exp STAR exp { $$ = new node("*"); $$->add($1); $$->add($3); $$->v = b->CreateMul($1->v, $3->v); }
+			| exp SLASH exp { $$ = new node("/"); $$->add($1); $$->add($3); $$->v = b->CreateSDiv($1->v, $3->v); }
+			| exp EQ exp { $$ = new node("="); $$->add($1); $$->add($3); $$->v = b->CreateICmpEQ($1->v, $3->v); }
+			| exp NEQ exp { $$ = new node("<>"); $$->add($1); $$->add($3); $$->v = b->CreateICmpNE($1->v, $3->v); }
+			| exp LT exp { $$ = new node("<"); $$->add($1); $$->add($3); $$->v = b->CreateICmpSLT($1->v, $3->v); }
+			| exp GT exp { $$ = new node(">"); $$->add($1); $$->add($3); $$->v = b->CreateICmpSGT($1->v, $3->v); }
+			| exp LE exp { $$ = new node("<="); $$->add($1); $$->add($3); $$->v = b->CreateICmpSLE($1->v, $3->v); }
+			| exp GE exp { $$ = new node(">="); $$->add($1); $$->add($3); $$->v = b->CreateICmpSGE($1->v, $3->v); }
+			| exp AND exp { $$ = new node("&"); $$->add($1); $$->add($3); $$->v = b->CreateAnd($1->v, $3->v); }
+			| exp OR exp { $$ = new node("|"); $$->add($1); $$->add($3); $$->v = b->CreateOr($1->v, $3->v); }
+			| LPAREN exps RPAREN { $$ = new node("paren"); $$->add($2); $$->v = $2->v; }
+			| lvalue ASSIGN exp { $$ = new node("assign"); $$->add($1); $$->add($3); $$->v = b->CreateStore($3->v, $1->v); }
 			| IF exp THEN exp %prec LOWER_THAN_ELSE { $$ = new node("if"); $$->add($2); $$->add($4); }
 			| IF exp THEN exp ELSE exp { $$ = new node("if-else"); $$->add($2); $$->add($4); $$->add($6); }
-			| WHILE exp DO exp %prec HIGHER_THAN_OP { $$ = new node("while"); $$->add($2); $$->add($4); }
-			| FOR id ASSIGN exp TO exp DO exp %prec HIGHER_THAN_OP { $$ = new node("for"); Exp n = new node("cond"); n->add($2); n->add($4); n->add($6); $$->add(n); $$->add($8); }
+			| WHILE exp DO exp %prec HIGHER_THAN_OP { $$ = new node("while"); $$->add($2); $$->add($4); $$->v = 0; }
+			| FOR id ASSIGN exp TO exp DO exp %prec HIGHER_THAN_OP { $$ = new node("for"); Exp n = new node("cond"); n->add($2); n->add($4); n->add($6); $$->add(n); $$->add($8); $$->v = 0; }
 			| BREAK { $$ = new node($1); }
-			| LET decs IN exps END { $$ = new node("block"); $$->add($2); $$->add($4); }
+			| LET decs IN exps END { $$ = new node("block"); $$->add($2); $$->add($4); $$->v = 0; }
 			;
 
 %%

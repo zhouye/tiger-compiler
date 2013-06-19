@@ -24,9 +24,22 @@ void orz(char* c)
 	fflush(stdout);
 }
 
+IRBuilder<> *b; 
+
 int main()
 {
 	root = new node;
+	//preorder(root, 0);
+	
+	LLVMContext& context = getGlobalContext();
+	Module *module = new Module("top", context);
+	IRBuilder<> x(context); 
+	FunctionType *funcType = FunctionType::get(x.getInt32Ty(), false);
+	Function *mainFunc = Function::Create(funcType, llvm::Function::ExternalLinkage, "main", module);
+	BasicBlock *entry = BasicBlock::Create(context, "", mainFunc);
+	x.SetInsertPoint(entry);
+	b = new IRBuilder<>(entry);
 	yyparse();
-	preorder(root, 0);
+	x.CreateRet(ConstantInt::get(b->getInt32Ty(), 0, true));
+	module->dump();
 }
