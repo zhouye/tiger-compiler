@@ -11,17 +11,22 @@ LIBS = `llvm-config --libs`
 
 RM = /bin/rm -f
 
-tigerc: y.tab.o lex.yy.o tigerc.o
-	${CPP} -o tigerc lex.yy.o y.tab.o tigerc.o ${CPPFLAGS} ${LDFLAGS} ${LIBS} -lfl
+all: tigerc
 
-tigerc.o: tigerc.cpp tigerc.h
+tigerc: y.tab.o lex.yy.o tigerc.o ast.o
+	${CPP} -o tigerc lex.yy.o y.tab.o tigerc.o ast.o ${CPPFLAGS} ${LDFLAGS} ${LIBS} -lfl
+
+tigerc.o: tigerc.cpp
 	${CPP} ${CPPFLAGS} -c tigerc.cpp
 	
-y.tab.o: tiger.y
+ast.o: ast.cpp ast.h
+	${CPP} ${CPPFLAGS} -c ast.cpp
+	
+y.tab.o: tiger.y ast.o
 	${YACC} ${YFLAGS} tiger.y
 	${CPP} ${CPPFLAGS} y.tab.c -c 
 
-lex.yy.o: tiger.lex
+lex.yy.o: tiger.lex ast.o
 	${LEX} $(LFLAGS) tiger.lex
 	${CPP} ${CPPFLAGS} lex.yy.c -c 
 

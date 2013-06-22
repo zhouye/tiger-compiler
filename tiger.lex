@@ -1,6 +1,6 @@
 %{
+  #include "ast.h"
   #include <stdlib.h>
-  #include "tigerc.h"
   #include "y.tab.h"
   extern int lineno;
   int yycolumn = 1;

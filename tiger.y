@@ -1,14 +1,13 @@
 %{
 #include <cstdio>
 #include <cstdlib>
-#include "tigerc.h"
+#include "ast.h"
 using namespace std;
 
-extern node* root;
+extern Program* root;
 int yylex();
 extern int lineno;
 extern char *yytext;
-extern IRBuilder<>* b;
 
 /* parse error */
 void yyerror ( const char* s ) {
@@ -20,20 +19,18 @@ void yyerror ( const char* s ) {
 %}
 
 %union {
-	Program t_program;
-	Fields t_fields;
-	Params t_params;
-	Array t_array;
-	Lvalue t_lvalue;
-	Exps t_exps;
-	Decs t_decs;
-	Dec t_dec;
-	Vardec t_vardec;
-	Ty t_ty;
-	Tyfields t_tyfields;
-	Id t_id;
-	Exp t_exp;
-	char* str;
+	Program* t_program;
+	structFields* t_fields;
+	callerParams* t_params;
+	arrayOperators* t_array;
+	leftValue* t_lvalue;
+	Expressions* t_exps;
+	Expression* t_exp;
+	Declarations* t_decs;
+	Declaration* t_dec;
+	Variable* t_vardec;
+	typeFields* t_tyfields;
+	Ident* t_id;
 	int token;
 }
 
@@ -47,7 +44,6 @@ void yyerror ( const char* s ) {
 %type <t_decs> decs
 %type <t_dec> dec
 %type <t_vardec> vardec
-%type <t_ty> ty
 %type <t_tyfields> tyfields
 %type <t_id> id
 
@@ -72,78 +68,75 @@ void yyerror ( const char* s ) {
 
 %%
 
-program		: exp { root->comment = "program"; root->add($1); }
-			| decs { root->comment = "header"; root->add($1); }
+program		: exp { root = new Program($1); }
 			;
-fields		: { $$ = new node("fields"); }
-			| id EQ exp { $$ = new node("fields"); Fields n = new node("EQ"); n->add($1); n->add($3); $$->add(n); }
-			| fields COMMA id EQ exp { $$ = $1; Fields n = new node("EQ"); n->add($3); n->add($5); $1->add(n); }
+fields		: { $$ = new structFields; }
+			| id EQ exp { $$ = new structFields; $$->add(new structField($1, $3)); }
+			| fields COMMA id EQ exp { $$ = $1; $1->add(new structField($3, $5)); }
 			;
-params		: { $$ = new node("params"); }
-			| exp { $$ = new node("params"); $$->add($1); }
-			| params COMMA exp { $$ = $1; $1->add($3); }
+params		: { $$ = new callerParams; }
+			| exp { $$ = new callerParams; $$->add(new callerParam($1)); }
+			| params COMMA exp { $$ = $1; $1->add(new callerParam($3)); }
 			;
-array		: LBRACKET exp RBRACKET { $$ = $2; }
-			| array LBRACKET exp RBRACKET { $$ = new node("op[]"); $$->add($1); $$->add($3); }
+array		: LBRACKET exp RBRACKET { $$ = new arrayOperators; $$->add(new arrayOperator($2)); }
+			| array LBRACKET exp RBRACKET { $$ = $1; $$->add(new arrayOperator($3)); }
 			;
-lvalue		: id { $$ = new node("lvalue"); $$->add($1); $$->v = $1->v; }
-			| id array { $$ = new node("op[]"); $$->add($1); $$->add($2); }
-			| lvalue DOT id { $$ = new node("DOT"); $$->add($1); $$->add($3);}
-			| lvalue DOT id array { $$ = new node("op[]"); Lvalue n = new node("DOT"); n->add($1); n->add($3); $$->add(n); $$->add($3); }
+lvalue		: id { $$ = new varLvalue($1); }
+			| id array { $$ = new arrayLvalue(new varLvalue($1), $2); }
+			| lvalue DOT id { $$ = new structLvalue($1, $3); }
+			| lvalue DOT id array { $$ = new arrayLvalue(new structLvalue($1, $3), $4); }
 			;
-exps		: exps SEMICOLON exp { $$ = $1; $$->add($3); $$->v = $3->v; }
-			| exp { $$ = new node("exps"); $$->add($1); $$->v = $1->v; }
-			| { $$ = new node("exps"); $$->v = 0; }
+exps		: exps SEMICOLON exp { $$ = $1; $$->add($3); }
+			| exp { $$ = new Expressions; $$->add($1); }
+			| { $$ = new Expressions; }
 			;
-decs		: { $$ = new node("decs"); }
+decs		: { $$ = new Declarations; }
 			| decs dec { $$ = $1; $1->add($2); }
 			;
-dec			: TYPE id EQ ty { $$ = new node("typedef"); $$->add($2); $$->add($4); }
+dec			: TYPE id EQ id { $$ = new aliasType($2, $4); }
+			| TYPE id EQ LBRACE tyfields RBRACE { $$ = new structType($2, $5); }
+			| TYPE id EQ ARRAY OF id { $$ = new arrayType($2, $6); }
 			| vardec { $$ = $1; }
-			| FUNCTION id LPAREN tyfields RPAREN EQ exp { $$ = new node("function"); $$->add($2); $$->add($4); $$->add($7); }
-			| FUNCTION id LPAREN tyfields RPAREN COLON id EQ exp { $$ = new node("function"); $$->add($2); $$->add($4); $$->add($7); $$->add($9); }
+			| FUNCTION id LPAREN tyfields RPAREN EQ exp { $$ = new Function($2, $4, $7); }
+			| FUNCTION id LPAREN tyfields RPAREN COLON id EQ exp { $$ = new Function($2, $4, $7, $9); }
 			;
-vardec		: VAR id ASSIGN exp { $$ = new node("vardef"); $$->add($2); $$->add($4); }
-			| VAR id COLON id ASSIGN exp { $$ = new node("vardef"); $$->add($2); $$->add($4); $$->add($6); }
+vardec		: VAR id ASSIGN exp { $$ = new Variable($2, $4); }
+			| VAR id COLON id ASSIGN exp { $$ = new Variable($2, $4, $6); }
 			;
-ty			: id { $$ = $1; }
-			| LBRACE tyfields RBRACE { $$ = $2; }
-			| ARRAY OF id { $$ = new node("arrayof"); $$->add($3); }
+tyfields	: { $$ = new typeFields; }
+			| id COLON id { $$ = new typeFields; $$->add(new typeField($1, $3)); }
+			| tyfields COMMA id COLON id { $$ = $1; $$->add(new typeField($3, $5)); }
 			;
-tyfields	: { $$ = new node("fields");  }
-			| id COLON id { $$ = new node("fields"); Tyfields n = new node("type"); n->add($1); n->add($3); $$->add(n); }
-			| tyfields COMMA id COLON id { $$ = $1; Tyfields n = new node("type"); n->add($3); n->add($5); $$->add(n); }
+id			: ID { $$ = new Ident(new string(yytext)); }
 			;
-id			: ID { $$ = new node(yytext); $$->v = b->CreateAlloca(b->getInt32Ty(), 0, yytext); }
-			;
-exp			: NIL { $$ = new node($1); $$->v = 0; }
-			| INTEGERT { $$ = new node(yytext); $$->v = ConstantInt::get(b->getInt32Ty(), atoi(yytext), true); }
-			| STRINGT { $$ = new node(yytext); string s = yytext; $$->v = b->CreateGlobalStringPtr(s.substr(1, s.length()-2)); }
-			| lvalue { $$ = $1; $$->v = $1->v; }
-			| id array OF exp %prec HIGHER_THAN_OP { $$ = new node("constarr"); Lvalue n = new node("op[]"); n->add($1); n->add($2); $$->add(n); $$->add($4); }
-			| id LBRACE fields RBRACE { $$ = new node("fields"); $$->add($1); $$->add($3); }
-			| id LPAREN params RPAREN { $$ = new node("call"); $$->add($1); $$->add($3); }
-			| MINUS exp %prec UMINUS { $$ = new node("-"); $$->add($2); }
-			| exp PLUS exp { $$ = new node("+"); $$->add($1); $$->add($3); $$->v = b->CreateAdd($1->v, $3->v); }
-			| exp MINUS exp { $$ = new node("-"); $$->add($1); $$->add($3); $$->v = b->CreateSub($1->v, $3->v); }
-			| exp STAR exp { $$ = new node("*"); $$->add($1); $$->add($3); $$->v = b->CreateMul($1->v, $3->v); }
-			| exp SLASH exp { $$ = new node("/"); $$->add($1); $$->add($3); $$->v = b->CreateSDiv($1->v, $3->v); }
-			| exp EQ exp { $$ = new node("="); $$->add($1); $$->add($3); $$->v = b->CreateICmpEQ($1->v, $3->v); }
-			| exp NEQ exp { $$ = new node("<>"); $$->add($1); $$->add($3); $$->v = b->CreateICmpNE($1->v, $3->v); }
-			| exp LT exp { $$ = new node("<"); $$->add($1); $$->add($3); $$->v = b->CreateICmpSLT($1->v, $3->v); }
-			| exp GT exp { $$ = new node(">"); $$->add($1); $$->add($3); $$->v = b->CreateICmpSGT($1->v, $3->v); }
-			| exp LE exp { $$ = new node("<="); $$->add($1); $$->add($3); $$->v = b->CreateICmpSLE($1->v, $3->v); }
-			| exp GE exp { $$ = new node(">="); $$->add($1); $$->add($3); $$->v = b->CreateICmpSGE($1->v, $3->v); }
-			| exp AND exp { $$ = new node("&"); $$->add($1); $$->add($3); $$->v = b->CreateAnd($1->v, $3->v); }
-			| exp OR exp { $$ = new node("|"); $$->add($1); $$->add($3); $$->v = b->CreateOr($1->v, $3->v); }
-			| LPAREN exps RPAREN { $$ = new node("paren"); $$->add($2); $$->v = $2->v; }
-			| lvalue ASSIGN exp { $$ = new node("assign"); $$->add($1); $$->add($3); $$->v = b->CreateStore($3->v, $1->v); }
-			| IF exp THEN exp %prec LOWER_THAN_ELSE { $$ = new node("if"); $$->add($2); $$->add($4); }
-			| IF exp THEN exp ELSE exp { $$ = new node("if-else"); $$->add($2); $$->add($4); $$->add($6); }
-			| WHILE exp DO exp %prec HIGHER_THAN_OP { $$ = new node("while"); $$->add($2); $$->add($4); $$->v = 0; }
-			| FOR id ASSIGN exp TO exp DO exp %prec HIGHER_THAN_OP { $$ = new node("for"); Exp n = new node("cond"); n->add($2); n->add($4); n->add($6); $$->add(n); $$->add($8); $$->v = 0; }
-			| BREAK { $$ = new node($1); }
-			| LET decs IN exps END { $$ = new node("block"); $$->add($2); $$->add($4); $$->v = 0; }
+exp			: NIL { $$ = new nullConstant; }
+			| INTEGERT { $$ = new intConstant(atoi(yytext)); }
+			| STRINGT { string s = yytext; $$ = new stringConstant(s.substr(1, s.length()-2)); }
+			| lvalue { $$ = $1; }
+			| id array OF exp %prec HIGHER_THAN_OP { $$ = new arrayConstant($1, $2, $4); }
+			| id LBRACE fields RBRACE { $$ = new structConstant($1, $3); }
+			| id LPAREN params RPAREN { $$ = new functionCaller($1, $3); }
+			| MINUS exp %prec UMINUS { $$ = new uniOperator("-", $2); }
+			| exp PLUS exp { $$ = new binOperator("+", $1, $3); }
+			| exp MINUS exp { $$ = new binOperator("-", $1, $3); }
+			| exp STAR exp { $$ = new binOperator("*", $1, $3); }
+			| exp SLASH exp { $$ = new binOperator("/", $1, $3); }
+			| exp EQ exp { $$ = new binOperator("=", $1, $3); }
+			| exp NEQ exp { $$ = new binOperator("<>", $1, $3); }
+			| exp LT exp { $$ = new binOperator("<", $1, $3); }
+			| exp GT exp { $$ = new binOperator(">", $1, $3); }
+			| exp LE exp { $$ = new binOperator("<=", $1, $3); }
+			| exp GE exp { $$ = new binOperator(">=", $1, $3); }
+			| exp AND exp { $$ = new binOperator("&", $1, $3); }
+			| exp OR exp { $$ = new binOperator("|", $1, $3); }
+			| LPAREN exps RPAREN { $$ = $2; }
+			| lvalue ASSIGN exp { $$ = new assignOperator($1, $3); }
+			| IF exp THEN exp %prec LOWER_THAN_ELSE { $$ = new ifthenBlock($2, $4); }
+			| IF exp THEN exp ELSE exp { $$ = new ifelseBlock($2, $4, $6); }
+			| WHILE exp DO exp %prec HIGHER_THAN_OP { $$ = new whileBlock($2, $4); }
+			| FOR id ASSIGN exp TO exp DO exp %prec HIGHER_THAN_OP { $$ = new forBlock($2, $4, $6, $8); }
+			| BREAK { $$ = new breakLoop; }
+			| LET decs IN exps END { $$ = $4; $$->dec($2); }
 			;
 
 %%
