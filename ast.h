@@ -18,6 +18,9 @@
 #include <vector>
 
 using namespace std;
+using namespace llvm;
+
+extern Module *module;
 
 struct node
 {
@@ -26,8 +29,10 @@ struct node
 
 struct Ident : public node
 {
-	string* str;
-	Ident(string* _str) : str(_str) {}
+	string str;
+	Ident(string _str) : str(_str) {}
+	operator string() { return str; }
+	string s() { return str; }
 	virtual void gen();
 };
 
@@ -36,24 +41,27 @@ struct Declaration : public node
 	virtual void gen();
 };
 
-struct Type : public Declaration
+struct typeDec : public Declaration
 {
 	Ident* id;
+	Type* type;
 	virtual void gen();
 };
 
-struct aliasType : public Type
+struct aliasType : public typeDec
 {
 	Ident* id;
 	Ident* content;
+	Type* type;
 	aliasType(Ident* _id, Ident* _content) : id(_id), content(_content) {}
 	virtual void gen();
 };
 
-struct arrayType : public Type
+struct arrayType : public typeDec
 {
 	Ident* id;
 	Ident* content;
+	Type* type;
 	arrayType(Ident* _id, Ident* _content) : id(_id), content(_content) {}
 	virtual void gen();
 };
@@ -73,10 +81,11 @@ struct typeFields : public node
 	virtual void gen();
 };
 
-struct structType : public Type
+struct structType : public typeDec
 {
 	Ident* id;
 	typeFields* fields;
+	Type* type;
 	structType(Ident* _id, typeFields* _fields) : id(_id), fields(_fields) {}
 	virtual void gen();
 };
@@ -90,31 +99,35 @@ struct Declarations : public node
 
 struct Expression : public node
 {
-	Declarations* decs;
-	llvm::Value* v;
-	void dec(Declarations* _decs) { decs = _decs; }
+	Value* v;
 	Expression() : v(0) {}
 	virtual void gen();
 };
 
 struct Expressions : public Expression
 {
-	Declarations* decs;
-	llvm::Value* v;
 	vector<Expression*> vec;
 	void add(Expression* s) { vec.push_back(s); }
 	virtual void gen();
 };
 
-struct Function : public Declaration
+struct expBlock : public Expression
+{
+	Declarations* decs;
+	Expression* exp;
+	expBlock(Declarations* _decs, Expression* _exp) : decs(_decs), exp(_exp) {}
+	virtual void gen();
+};
+
+struct funcDec : public Declaration
 {
 	Ident* id;
 	typeFields* params;
 	Ident* ret;
 	Expression* exp;
-	Function(Ident* _id, typeFields* _params, Expression* _exp) : id(_id), params(_params), ret(0), exp(_exp) {}
-	Function(Ident* _id, typeFields* _params, Ident* _ret, Expression* _exp) : id(_id), params(_params), ret(_ret), exp(_exp) {} 
-	llvm::Function* f;
+	funcDec(Ident* _id, typeFields* _params, Expression* _exp) : id(_id), params(_params), ret(0), exp(_exp) {}
+	funcDec(Ident* _id, typeFields* _params, Ident* _ret, Expression* _exp) : id(_id), params(_params), ret(_ret), exp(_exp) {} 
+	Function* f;
 	virtual void gen();
 };
 
@@ -123,6 +136,7 @@ struct Variable : public Declaration
 	Ident* id;
 	Ident* type;
 	Expression* exp;
+	Value* v;
 	Variable(Ident* _id, Ident* _type, Expression* _exp) : id(_id), type(_type), exp(_exp) {}
 	Variable(Ident* _id, Expression* _exp) : id(_id), type(0), exp(_exp) {}
 	virtual void gen();
@@ -135,34 +149,26 @@ struct Program : public node
 	virtual void gen();
 };
 
-struct Constant : public Expression
+struct constValue : public Expression
 {
-	Declarations* decs;
-	llvm::Value* v;
 	virtual void gen();
 };
 
-struct nullConstant : public Constant
+struct nullConstant : public constValue
 {
-	Declarations* decs;
-	llvm::Value* v;
-	nullConstant() : v(0) {}
+	nullConstant() {}
 	virtual void gen();
 };
 
-struct intConstant : public Constant
+struct intConstant : public constValue
 {
-	Declarations* decs;
-	llvm::Value* v;
 	int i;
 	intConstant(int _i) : i(_i) {}
 	virtual void gen();
 };
 
-struct stringConstant : public Constant
+struct stringConstant : public constValue
 {
-	Declarations* decs;
-	llvm::Value* v;
 	string s;
 	stringConstant(string _s) : s(_s) {}
 	virtual void gen();
@@ -170,8 +176,6 @@ struct stringConstant : public Constant
 
 struct uniOperator : public Expression
 {
-	Declarations* decs;
-	llvm::Value* v;
 	string op;
 	Expression* exp;
 	uniOperator(string _op, Expression* _exp) : op(_op), exp(_exp) {}
@@ -180,8 +184,6 @@ struct uniOperator : public Expression
 
 struct binOperator : public Expression
 {
-	Declarations* decs;
-	llvm::Value* v;
 	string op;
 	Expression* expa;
 	Expression* exadd;
@@ -191,15 +193,11 @@ struct binOperator : public Expression
 
 struct leftValue : public Expression
 {
-	Declarations* decs;
-	llvm::Value* v;
 	virtual void gen();
 };
 
 struct assignOperator : public Expression
 {
-	Declarations* decs;
-	llvm::Value* v;
 	leftValue* lvalue;
 	Expression* exp;
 	assignOperator(leftValue* _lvalue, Expression* _exp) : lvalue(_lvalue), exp(_exp) {}
@@ -208,8 +206,6 @@ struct assignOperator : public Expression
 
 struct ifthenBlock : public Expression
 {
-	Declarations* decs;
-	llvm::Value* v;
 	Expression* cond;
 	Expression* thenBlock;
 	ifthenBlock(Expression* _cond, Expression* _thenBlock) : cond(_cond), thenBlock(_thenBlock) {}
@@ -218,8 +214,6 @@ struct ifthenBlock : public Expression
 
 struct ifelseBlock : public Expression
 {
-	Declarations* decs;
-	llvm::Value* v;
 	Expression* cond;
 	Expression* thenBlock;
 	Expression* elseBlock;
@@ -230,8 +224,6 @@ struct ifelseBlock : public Expression
 
 struct forBlock : public Expression
 {
-	Declarations* decs;
-	llvm::Value* v;
 	Ident* id;
 	Expression* loopFrom;
 	Expression* loopTo;
@@ -243,8 +235,6 @@ struct forBlock : public Expression
 
 struct whileBlock : public Expression
 {
-	Declarations* decs;
-	llvm::Value* v;
 	Expression* cond;
 	Expression* loopBlock;
 	whileBlock(Expression* _cond, Expression* _loopBlock) : cond(_cond), loopBlock(_loopBlock) {}
@@ -253,8 +243,6 @@ struct whileBlock : public Expression
 
 struct breakLoop : public Expression
 {
-	Declarations* decs;
-	llvm::Value* v;
 	virtual void gen();
 };
 
@@ -274,8 +262,6 @@ struct callerParams : public node
 
 struct functionCaller : public Expression
 {
-	Declarations* decs;
-	llvm::Value* v;
 	Ident* id;
 	callerParams* params;
 	functionCaller(Ident* _id, callerParams* _params) : id(_id), params(_params) {}
@@ -284,8 +270,6 @@ struct functionCaller : public Expression
 
 struct arrayOperator : public leftValue
 {
-	Declarations* decs;
-	llvm::Value* v;
 	Expression* exp;
 	arrayOperator(Expression* _exp) : exp(_exp) {} 
 	virtual void gen();
@@ -313,7 +297,7 @@ struct structFields : public node
 	virtual void gen();
 };
 
-struct structConstant : public Constant
+struct structConstant : public constValue
 {
 	Ident* id;
 	structFields* fields;
@@ -329,7 +313,7 @@ struct arrayLvalue : public leftValue
 	virtual void gen();
 };
 
-struct arrayConstant : public Constant
+struct arrayConstant : public constValue
 {
 	Ident* type;
 	arrayOperators* size;

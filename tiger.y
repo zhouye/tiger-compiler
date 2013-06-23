@@ -97,8 +97,8 @@ dec			: TYPE id EQ id { $$ = new aliasType($2, $4); }
 			| TYPE id EQ LBRACE tyfields RBRACE { $$ = new structType($2, $5); }
 			| TYPE id EQ ARRAY OF id { $$ = new arrayType($2, $6); }
 			| vardec { $$ = $1; }
-			| FUNCTION id LPAREN tyfields RPAREN EQ exp { $$ = new Function($2, $4, $7); }
-			| FUNCTION id LPAREN tyfields RPAREN COLON id EQ exp { $$ = new Function($2, $4, $7, $9); }
+			| FUNCTION id LPAREN tyfields RPAREN EQ exp { $$ = new funcDec($2, $4, $7); }
+			| FUNCTION id LPAREN tyfields RPAREN COLON id EQ exp { $$ = new funcDec($2, $4, $7, $9); }
 			;
 vardec		: VAR id ASSIGN exp { $$ = new Variable($2, $4); }
 			| VAR id COLON id ASSIGN exp { $$ = new Variable($2, $4, $6); }
@@ -107,7 +107,7 @@ tyfields	: { $$ = new typeFields; }
 			| id COLON id { $$ = new typeFields; $$->add(new typeField($1, $3)); }
 			| tyfields COMMA id COLON id { $$ = $1; $$->add(new typeField($3, $5)); }
 			;
-id			: ID { $$ = new Ident(new string(yytext)); }
+id			: ID { $$ = new Ident(string(yytext)); }
 			;
 exp			: NIL { $$ = new nullConstant; }
 			| INTEGERT { $$ = new intConstant(atoi(yytext)); }
@@ -136,7 +136,7 @@ exp			: NIL { $$ = new nullConstant; }
 			| WHILE exp DO exp %prec HIGHER_THAN_OP { $$ = new whileBlock($2, $4); }
 			| FOR id ASSIGN exp TO exp DO exp %prec HIGHER_THAN_OP { $$ = new forBlock($2, $4, $6, $8); }
 			| BREAK { $$ = new breakLoop; }
-			| LET decs IN exps END { $$ = $4; $$->dec($2); }
+			| LET decs IN exps END { $$ = new expBlock($2, $4); }
 			;
 
 %%
