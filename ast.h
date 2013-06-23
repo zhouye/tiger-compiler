@@ -194,6 +194,7 @@ struct binOperator : public Expression
 
 struct leftValue : public Expression
 {
+	Value* lv;
 	virtual void gen();
 };
 
@@ -250,6 +251,7 @@ struct breakLoop : public Expression
 struct callerParam : public node
 {
 	Expression* exp;
+	Value* v;
 	callerParam(Expression* _exp) : exp(_exp) {}
 	virtual void gen();
 };

@@ -28,6 +28,45 @@ IRBuilder<>* topb()
 	return builders.top();
 }
 
+Type* findtype(Ident* id)
+{
+	for(int i = globaldec.size()-1; i >=0; i--){
+		for(int j = globaldec[i]->vec.size()-1; j >= 0; j--){
+			if(typeid(*(globaldec[i]->vec[j])) == typeid(typeDec)){
+				typeDec* t = (typeDec*)globaldec[i]->vec[j];
+				if(t->id->s() == id->s()) return t->type;
+			}
+		}
+	}
+	return 0;
+}
+
+Value* findvar(Ident* id)
+{
+	for(int i = globaldec.size()-1; i >=0; i--){
+		for(int j = globaldec[i]->vec.size()-1; j >= 0; j--){
+			if(typeid(*(globaldec[i]->vec[j])) == typeid(Variable)){
+				Variable* t = (Variable*)globaldec[i]->vec[j];
+				if(t->id->s() == id->s()) return t->v;
+			}
+		}
+	}
+	return 0;
+}
+
+Function* findfunc(Ident* id)
+{
+	for(int i = globaldec.size()-1; i >=0; i--){
+		for(int j = globaldec[i]->vec.size()-1; j >= 0; j--){
+			if(typeid(*(globaldec[i]->vec[j])) == typeid(funcDec)){
+				funcDec* t = (funcDec*)globaldec[i]->vec[j];
+				if(t->id->s() == id->s()) return t->f;
+			}
+		}
+	}
+	return 0;
+}
+
 void node::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
@@ -76,7 +115,12 @@ void structType::gen()
 void Declarations::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
-	for(int i = 0; i < vec.size(); i++) vec[i]->gen();
+	Declarations* decblk = new Declarations;
+	globaldec.push_back(decblk);
+	for(int i = 0; i < vec.size(); i++){
+		vec[i]->gen();
+		decblk->add(vec[i]);
+	}
 	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
 
@@ -97,7 +141,6 @@ void expBlock::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
 	decs->gen();
-	globaldec.push_back(decs);
 	exp->gen();
 	globaldec.pop_back();
 	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
@@ -106,30 +149,41 @@ void expBlock::gen()
 void funcDec::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
+	Type* rettype = 0;
+	if(ret) rettype = findtype(ret);
+	else rettype = Type::getVoidTy(getGlobalContext());
+	vector<Type*> argTypes;
+	for(int i = 0; i < params->vec.size(); i++) argTypes.push_back(findtype(params->vec[i]->type));
+	Declarations* argDec = new Declarations;
+	FunctionType *ftype = FunctionType::get(rettype, makeArrayRef(argTypes), false);
+	f = Function::Create(ftype, GlobalValue::InternalLinkage, id->s(), module);
+	Function::arg_iterator ait;
+	BasicBlock *bblock = BasicBlock::Create(getGlobalContext(), "", f, 0);
+    IRBuilder<>* b = new IRBuilder<>(bblock);
+	pushb(b);
+	for (ait = f->arg_begin(); ait != f->arg_end(); ait++) {
+		Expression* argValue = new Expression;
+		argValue->v = ait;
+		for(int i = 0; i < params->vec.size(); i++) argDec->add(new Variable(params->vec[i]->id, argValue));
+	}
+	argDec->gen();
+	exp->gen();
+	b->CreateRet(exp->v);
+	popb();
+	globaldec.pop_back();
+	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
 
 void Variable::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
 	exp->gen();
-	if(type){
-		for(int i = 0; i < globaldec.size(); i++){
-			for(int j = 0; j < globaldec[i]->vec.size(); j++){
-				if(typeid(*(globaldec[i]->vec[j])) == typeid(typeDec)){
-					typeDec* t = (typeDec*)globaldec[i]->vec[j];
-					if(t->id->s() == type->s()){
-						IRBuilder<>* b = topb();
-						v = b->CreateAlloca(t->type, 0, id->s());
-						b->CreateStore(exp->v, v);
-					}
-				}
-			}
-		}
-	}else{
-		IRBuilder<>* b = topb();
-		v = b->CreateAlloca(b->getInt32Ty(), 0, id->s());
-		b->CreateStore(exp->v, v);
-	}
+	IRBuilder<>* b = topb();
+	Type* vartype;
+	if(type) vartype = findtype(type);
+	else vartype = Type::getInt32Ty(getGlobalContext());
+	v = b->CreateAlloca(vartype, 0, id->s());
+	b->CreateStore(exp->v, v);
 	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
 
@@ -186,7 +240,7 @@ void uniOperator::gen()
 	cerr << "Generating code for " << typeid(*this).name() << endl;
 	IRBuilder<>* b = topb();
 	exp->gen();
-	Value* expv = b->CreateLoad(exp->v);
+	Value* expv = exp->v;
 	if(op == "-") v = b->CreateNeg(expv);
 }
 
@@ -196,8 +250,8 @@ void binOperator::gen()
 	IRBuilder<>* b = topb();
 	expa->gen();
 	expb->gen();
-	Value* expav = b->CreateLoad(expa->v);
-	Value* expbv = b->CreateLoad(expb->v);
+	Value* expav = expa->v;
+	Value* expbv = expb->v;
 	if(op == "+") v = b->CreateAdd(expav, expbv);
 	if(op == "-") v = b->CreateSub(expav, expbv);
 	if(op == "*") v = b->CreateMul(expav, expbv);
@@ -223,7 +277,7 @@ void assignOperator::gen()
 	IRBuilder<>* b = topb();
 	lvalue->gen();
 	exp->gen();
-	v = b->CreateStore(exp->v, lvalue->v);
+	v = b->CreateStore(exp->v, lvalue->lv);
 	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
 
@@ -255,16 +309,28 @@ void breakLoop::gen()
 void callerParam::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
+	IRBuilder<>* b = topb();
+	exp->gen();
+	v = exp->v;
+	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
 
 void callerParams::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
+	for(int i = 0; i < vec.size(); i++) vec[i]->gen();
+	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;	
 }
 
 void functionCaller::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
+	IRBuilder<>* b = topb();
+	params->gen();
+	vector<Value*> vec;
+	for(int k = 0; k < params->vec.size(); k++) vec.push_back(params->vec[k]->v);
+	v = b->CreateCall(findfunc(id), makeArrayRef(vec));
+	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
 
 void arrayOperator::gen()
@@ -305,16 +371,9 @@ void arrayConstant::gen()
 void varLvalue::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
-	for(int i = 0; i < globaldec.size(); i++){
-		for(int j = 0; j < globaldec[i]->vec.size(); j++){
-			if(typeid(*(globaldec[i]->vec[j])) == typeid(Variable)){
-				Variable* t = (Variable*)globaldec[i]->vec[j];
-				if(t->id->s() == id->s()){
-					v = t->v;
-				}
-			}
-		}
-	}
+	IRBuilder<>* b = topb();
+	v = b->CreateLoad(findvar(id));
+	lv = findvar(id);
 	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
 
