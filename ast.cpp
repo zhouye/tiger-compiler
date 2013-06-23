@@ -111,16 +111,24 @@ void funcDec::gen()
 void Variable::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
-	for(int i = 0; i < globaldec.size(); i++){
-		for(int j = 0; j < globaldec[i]->vec.size(); j++){
-			if(typeid(*(globaldec[i]->vec[j])) == typeid(typeDec)){
-				typeDec* t = (typeDec*)globaldec[i]->vec[j];
-				if(t->id->s() == type->s()){
-					IRBuilder<>* b = topb();
-					v = b->CreateAlloca(t->type, 0, id->s());
+	exp->gen();
+	if(type){
+		for(int i = 0; i < globaldec.size(); i++){
+			for(int j = 0; j < globaldec[i]->vec.size(); j++){
+				if(typeid(*(globaldec[i]->vec[j])) == typeid(typeDec)){
+					typeDec* t = (typeDec*)globaldec[i]->vec[j];
+					if(t->id->s() == type->s()){
+						IRBuilder<>* b = topb();
+						v = b->CreateAlloca(t->type, 0, id->s());
+						b->CreateStore(exp->v, v);
+					}
 				}
 			}
 		}
+	}else{
+		IRBuilder<>* b = topb();
+		v = b->CreateAlloca(b->getInt32Ty(), 0, id->s());
+		b->CreateStore(exp->v, v);
 	}
 	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
@@ -130,7 +138,7 @@ void Program::gen()
 	cerr << "Generating code for " << typeid(*this).name() << endl;
 	module = new Module("", getGlobalContext());
 	FunctionType *funcType = FunctionType::get(Type::getInt32Ty(getGlobalContext()), false);
-	Function *mainFunc = Function::Create(funcType, Function::ExternalLinkage, "main", module);
+	mainFunc = Function::Create(funcType, Function::ExternalLinkage, "main", module);
 	BasicBlock *entry = BasicBlock::Create(getGlobalContext(), "", mainFunc);
 	IRBuilder<>* b;
 	Declarations* typedecs = new Declarations;
@@ -176,11 +184,32 @@ void stringConstant::gen()
 void uniOperator::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
+	IRBuilder<>* b = topb();
+	exp->gen();
+	Value* expv = b->CreateLoad(exp->v);
+	if(op == "-") v = b->CreateNeg(expv);
 }
 
 void binOperator::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
+	IRBuilder<>* b = topb();
+	expa->gen();
+	expb->gen();
+	Value* expav = b->CreateLoad(expa->v);
+	Value* expbv = b->CreateLoad(expb->v);
+	if(op == "+") v = b->CreateAdd(expav, expbv);
+	if(op == "-") v = b->CreateSub(expav, expbv);
+	if(op == "*") v = b->CreateMul(expav, expbv);
+	if(op == "/") v = b->CreateSDiv(expav, expbv);
+	if(op == "=") v = b->CreateICmpEQ(expav, expbv);
+	if(op == "<>") v = b->CreateICmpNE(expav, expbv);
+	if(op == "<") v = b->CreateICmpSLT(expav, expbv);
+	if(op == ">") v = b->CreateICmpSGT(expav, expbv);
+	if(op == "<=") v = b->CreateICmpSLE(expav, expbv);
+	if(op == ">=") v = b->CreateICmpSGE(expav, expbv);
+	if(op == "&") v = b->CreateAnd(expav, expbv);
+	if(op == "|") v = b->CreateOr(expav, expbv);
 }
 
 void leftValue::gen()

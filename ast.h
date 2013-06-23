@@ -144,6 +144,7 @@ struct Variable : public Declaration
 
 struct Program : public node
 {
+	Function *mainFunc;
 	Expression* exp;
 	Program(Expression* _exp) : exp(_exp) {}
 	virtual void gen();
@@ -186,8 +187,8 @@ struct binOperator : public Expression
 {
 	string op;
 	Expression* expa;
-	Expression* exadd;
-	binOperator(string _op, Expression* _expa, Expression* _exadd) : op(_op), expa(_expa), exadd(_exadd) {}
+	Expression* expb;
+	binOperator(string _op, Expression* _expa, Expression* _expb) : op(_op), expa(_expa), expb(_expb) {}
 	virtual void gen();
 };
 
