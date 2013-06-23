@@ -1,0 +1,10 @@
+let
+	var a:=3
+	var c:=4
+	function add(a:int,b:int):int=a+b
+	function abc()=print("abc")
+in
+	a:=add(a,c);
+	abc(2);
+	print("%d",a)
+end
