@@ -5,7 +5,7 @@ LFLAGS= -8
 YACC= bison 
 YFLAGS= -d -t -y
 
-CPPFLAGS = `llvm-config --cppflags` -g
+CPPFLAGS = `llvm-config --cppflags`
 LDFLAGS = `llvm-config --ldflags`
 LIBS = `llvm-config --libs`
 
@@ -19,7 +19,7 @@ tigerc: y.tab.o lex.yy.o tigerc.o ast.o
 tigerc.o: tigerc.cpp
 	${CPP} ${CPPFLAGS} -c tigerc.cpp
 	
-ast.o: ast.cpp ast.h
+ast.o: ast.cpp ast.h 
 	${CPP} ${CPPFLAGS} -c ast.cpp
 	
 y.tab.o: tiger.y ast.o

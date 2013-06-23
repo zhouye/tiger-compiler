@@ -1,0 +1,12 @@
+let
+var a:int:=10
+var b:int:=10
+function f(c:int):int=c-1
+in
+if a=10 then
+b:=0;
+while a>0 do
+(b:=b+a; a:=f(a));
+print("%d ",a);
+print("%d",b)
+end

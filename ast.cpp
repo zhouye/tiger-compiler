@@ -10,6 +10,16 @@ stack<IRBuilder<>*> builders;
 vector<Declarations*> globaldec;
 Module *module;
 
+Function* createPrintfFunction()
+{
+    std::vector<Type*> printf_arg_types;
+    printf_arg_types.push_back(Type::getInt8PtrTy(getGlobalContext()));
+    FunctionType* printf_type = FunctionType::get(Type::getInt32Ty(getGlobalContext()), printf_arg_types, true);
+    Function *func = Function::Create(printf_type, Function::ExternalLinkage, "printf", module);
+    func->setCallingConv(CallingConv::C);
+    return func;
+}
+
 IRBuilder<>* pushb(IRBuilder<>* blk)
 {
 	builders.push(blk);
@@ -142,6 +152,7 @@ void expBlock::gen()
 	cerr << "Generating code for " << typeid(*this).name() << endl;
 	decs->gen();
 	exp->gen();
+	v = exp->v;
 	globaldec.pop_back();
 	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
@@ -158,7 +169,7 @@ void funcDec::gen()
 	FunctionType *ftype = FunctionType::get(rettype, makeArrayRef(argTypes), false);
 	f = Function::Create(ftype, GlobalValue::InternalLinkage, id->s(), module);
 	Function::arg_iterator ait;
-	BasicBlock *bblock = BasicBlock::Create(getGlobalContext(), "", f, 0);
+	BasicBlock *bblock = BasicBlock::Create(getGlobalContext(), "entry", f, 0);
     IRBuilder<>* b = new IRBuilder<>(bblock);
 	pushb(b);
 	for (ait = f->arg_begin(); ait != f->arg_end(); ait++) {
@@ -192,10 +203,13 @@ void Program::gen()
 	cerr << "Generating code for " << typeid(*this).name() << endl;
 	module = new Module("", getGlobalContext());
 	FunctionType *funcType = FunctionType::get(Type::getInt32Ty(getGlobalContext()), false);
-	mainFunc = Function::Create(funcType, Function::ExternalLinkage, "main", module);
-	BasicBlock *entry = BasicBlock::Create(getGlobalContext(), "", mainFunc);
+	mainFunc = Function::Create(funcType, GlobalValue::InternalLinkage, "main", module);
+	BasicBlock *entry = BasicBlock::Create(getGlobalContext(), "entry", mainFunc);
 	IRBuilder<>* b;
 	Declarations* typedecs = new Declarations;
+	funcDec* printDec = new funcDec(new Ident("print"), 0, new Expression);
+	printDec->f = createPrintfFunction();
+	typedecs->add(printDec);
 	typeDec* inttype = new typeDec;
 	inttype->id = new Ident(string("int"));
 	inttype->type = Type::getInt32Ty(getGlobalContext());
@@ -205,7 +219,8 @@ void Program::gen()
 	b = pushb(new IRBuilder<>(entry));
 	exp->gen();
 	b = popb();
-	b->CreateRet(ConstantInt::get(b->getInt32Ty(), 0, true));
+	b->CreateRet(exp->v);
+	//b->CreateRet(ConstantInt::get(b->getInt32Ty(), 0, true));
 	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
 
@@ -223,7 +238,7 @@ void intConstant::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
 	IRBuilder<>* b = topb();
-	v = ConstantInt::get(b->getInt32Ty(), i, true);
+	v = ConstantInt::get(Type::getInt32Ty(getGlobalContext()), i, true);
 	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
 
@@ -284,10 +299,47 @@ void assignOperator::gen()
 void ifthenBlock::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
+	IRBuilder<>* b = topb();
+	cond->gen();
+	Function *TheFunction = b->GetInsertBlock()->getParent();
+	BasicBlock *ThenBB = BasicBlock::Create(getGlobalContext(), "then", TheFunction);
+	BasicBlock *MergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
+	b->CreateCondBr(cond->v, ThenBB, MergeBB);
+	b->SetInsertPoint(ThenBB);
+	thenBlock->gen();
+	b->CreateBr(MergeBB);
+	ThenBB = b->GetInsertBlock();
+	TheFunction->getBasicBlockList().push_back(MergeBB);
+	b->SetInsertPoint(MergeBB);
+	v = 0;
+	cerr << "Generating code for " << typeid(*this).name() << endl;
 }
 
 void ifelseBlock::gen()
 {
+	cerr << "Generating code for " << typeid(*this).name() << endl;
+	IRBuilder<>* b = topb();
+	cond->gen();
+	Function *TheFunction = b->GetInsertBlock()->getParent();
+	BasicBlock *ThenBB = BasicBlock::Create(getGlobalContext(), "then", TheFunction);
+	BasicBlock *ElseBB = BasicBlock::Create(getGlobalContext(), "else");
+	BasicBlock *MergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
+	b->CreateCondBr(cond->v, ThenBB, ElseBB);
+	b->SetInsertPoint(ThenBB);
+	thenBlock->gen();
+	b->CreateBr(MergeBB);
+	ThenBB = b->GetInsertBlock();
+	TheFunction->getBasicBlockList().push_back(ElseBB);
+	b->SetInsertPoint(ElseBB);
+	elseBlock->gen();
+	b->CreateBr(MergeBB);
+	ElseBB = b->GetInsertBlock();
+	TheFunction->getBasicBlockList().push_back(MergeBB);
+	b->SetInsertPoint(MergeBB);
+	PHINode *PN = b->CreatePHI(thenBlock->v->getType(), 2, "iftmp");
+	PN->addIncoming(thenBlock->v, ThenBB);
+	PN->addIncoming(elseBlock->v, ElseBB);
+	v = PN;
 	cerr << "Generating code for " << typeid(*this).name() << endl;
 }
 
@@ -298,6 +350,25 @@ void forBlock::gen()
 
 void whileBlock::gen()
 {
+	cerr << "Generating code for " << typeid(*this).name() << endl;
+	IRBuilder<>* b = topb();
+	Function *TheFunction = b->GetInsertBlock()->getParent();
+	BasicBlock *CondBB = BasicBlock::Create(getGlobalContext(), "cond", TheFunction);
+	BasicBlock *LoopBB = BasicBlock::Create(getGlobalContext(), "loop");
+	BasicBlock *MergeBB = BasicBlock::Create(getGlobalContext(), "merge");
+	b->CreateBr(CondBB);
+	b->SetInsertPoint(CondBB);
+	cond->gen();
+	b->CreateCondBr(cond->v, LoopBB, MergeBB);
+	CondBB = b->GetInsertBlock();
+	TheFunction->getBasicBlockList().push_back(LoopBB);
+	b->SetInsertPoint(LoopBB);
+	loopBlock->gen();
+	b->CreateBr(CondBB);
+	LoopBB = b->GetInsertBlock();
+	TheFunction->getBasicBlockList().push_back(MergeBB);
+	b->SetInsertPoint(MergeBB);
+	v = 0;
 	cerr << "Generating code for " << typeid(*this).name() << endl;
 }
 
@@ -372,8 +443,8 @@ void varLvalue::gen()
 {
 	cerr << "Generating code for " << typeid(*this).name() << endl;
 	IRBuilder<>* b = topb();
-	v = b->CreateLoad(findvar(id));
 	lv = findvar(id);
+	v = b->CreateLoad(lv);
 	cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
 

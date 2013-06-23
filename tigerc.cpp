@@ -11,10 +11,15 @@ Program* root;
 int main()
 {
 	yyparse();
+	InitializeNativeTarget();
 	root->gen();
-	module->dump();
+	PassManager pm;
+	pm.add(createPrintModulePass(&outs()));
+	pm.run(*module);
 	std::cout << "Running code...\n";
 	ExecutionEngine *ee = EngineBuilder(module).create();
 	vector<GenericValue> noargs;
 	GenericValue v = ee->runFunction(root->mainFunc, noargs);
+	cout << endl;
+	//cout << endl << v.IntVal.getSExtValue() << endl; 
 }
