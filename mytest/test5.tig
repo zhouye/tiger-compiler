@@ -10,16 +10,14 @@ let
 		for i := 0 to N-1 do (
 			for j := 0 to N-1 do 
 				print(if col[i]=j then " O" else " .");
-			print("
-")
+			print("\n")
 		);
 		nil
 	)
     function try(c : int, N : int, row : intArray, col : intArray, diag1 : intArray, diag2 : intArray) = (
 		if c=N then (
 			printboard(N, col);
-			print("
-");
+			print("\n");
 			1
 		)else( 
 			for r := 0 to N-1 do

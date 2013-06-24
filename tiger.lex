@@ -95,31 +95,66 @@
   }
 
   int i=1;
-  while(i<yyleng-1)
+  int j;
+  int len=yyleng-1;
+  while(i<len)
   {
 	if (yytext[i]=='\\')
 	{ 
-	  if (i+3<yyleng-1 && yytext[i+1]>='0' && yytext[i+1]<='7' 
+	  if (i+3<len && yytext[i+1]>='0' && yytext[i+1]<='3' 
 	                   && yytext[i+2]>='0' && yytext[i+2]<='7'
-					   && yytext[i+3]>='0' && yytext[i+3]<='7')
-		i=i+4;
-      else if (i+3<yyleng-1 && (yytext[i+1]=='x')
+					   && yytext[i+3]>='0' && yytext[i+3]<='7') {
+		yytext[i]=64*(yytext[i+1]-'0')+8*(yytext[i+2]-'0')+(yytext[i+3]-'0');
+		for (j=i+1;j<len-2;j++)
+		  yytext[j]=yytext[j+3];
+		yytext[len-2]=0;yytext[len-1]=0;yytext[len]=0;
+		len=len-3;
+	  }
+      else if (i+3<len && (yytext[i+1]=='x')
 	                        && ((yytext[i+2]>='0' && yytext[i+2]<='9') || 
 	                          (yytext[i+2]>='A' && yytext[i+2]<='F') || 
 							  (yytext[i+2]>='a' && yytext[i+2]<='f')) 
 	                        && ((yytext[i+3]>='0' && yytext[i+3]<='9') || 
 						      (yytext[i+3]>='A' && yytext[i+3]<='F') || 
-							  (yytext[i+3]>='a' && yytext[i+3]<='f')))
-		i=i+4;		
-	  else if(i+1<yyleng-1 && (yytext[i+1]=='a' || yytext[i+1]=='b' || yytext[i+1]=='f' || yytext[i+1]=='n' ||
+							  (yytext[i+3]>='a' && yytext[i+3]<='f'))) {
+		yytext[i]=0;
+		if ((yytext[i+2]>='0') && (yytext[i+2]<='9'))
+		  yytext[i]+=16*(yytext[i+2]-'0');
+		else if ((yytext[i+2]>='A') && (yytext[i+2]<='F'))
+		  yytext[i]+=16*(yytext[i+2]-'A');
+		else
+		  yytext[i]+=16*(yytext[i+2]-'a');		
+		if ((yytext[i+3]>='0') && (yytext[i+3]<='9'))
+		  yytext[i]+=(yytext[i+3]-'0');
+		else if ((yytext[i+3]>='A') && (yytext[i+3]<='F'))
+		  yytext[i]+=(yytext[i+3]-'A');
+		else
+		  yytext[i]+=16*(yytext[i+3]-'a');
+		for (j=i+1;j<len-2;j++)
+		  yytext[j]=yytext[j+3];
+		yytext[len-2]=0;yytext[len-1]=0;yytext[len]=0;
+		len=len-3;							  
+	  }
+	  else if(i+1<len && (yytext[i+1]=='a' || yytext[i+1]=='b' || yytext[i+1]=='f' || yytext[i+1]=='n' ||
 	 		                   yytext[i+1]=='r' || yytext[i+1]=='t' || yytext[i+1]=='v' ||
-			                   yytext[i+1]=='\\' || yytext[i+1]=='"' )) 
-	    i=i+2;
+			                   yytext[i+1]=='\\' || yytext[i+1]=='"' )) {
+		if (yytext[i+1]=='a') yytext[i]=7;
+		if (yytext[i+1]=='b') yytext[i]=8;
+		if (yytext[i+1]=='f') yytext[i]=12;
+		if (yytext[i+1]=='n') yytext[i]=10;
+		if (yytext[i+1]=='r') yytext[i]=13;
+		if (yytext[i+1]=='t') yytext[i]=9;
+		if (yytext[i+1]=='\\') yytext[i]=92;
+		if (yytext[i+1]=='"') yytext[i]=34;
+		for (j=i+1;j<len;j++)
+			yytext[j]=yytext[j+1];
+		yytext[len]=0;
+		len--;
+	  }
 	  else
 	    yyerror("Invalid escape sequence");
 	}
-	else
-	  i++;
+	i++;
   }
   return STRINGT;
 }
