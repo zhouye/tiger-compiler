@@ -6,7 +6,7 @@
 using namespace std;
 using namespace llvm;
 
-const int CODEGENDEBUG = 1;
+const int CODEGENDEBUG = 0;
 
 stack<IRBuilder<>*> builders;
 vector<Declarations*> globaldec;
@@ -118,6 +118,7 @@ void typeDec::gen()
 void aliasType::gen()
 {
 	if (CODEGENDEBUG == 1) cerr << "Generating code for " << typeid(*this).name() << endl;
+	type = findtype(content);
 }
 
 void arrayType::gen()

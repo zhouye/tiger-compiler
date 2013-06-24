@@ -5,7 +5,7 @@ LFLAGS= -8
 YACC= bison 
 YFLAGS= -d -t -y
 
-CPPFLAGS = `llvm-config --cppflags` -g
+CPPFLAGS = `llvm-config --cppflags` -O2
 LDFLAGS = `llvm-config --ldflags`
 LIBS = `llvm-config --libs`
 
