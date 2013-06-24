@@ -6,7 +6,7 @@
 using namespace std;
 using namespace llvm;
 
-const int CODEGENDEBUG = 0;
+const int CODEGENDEBUG = 1;
 
 stack<IRBuilder<>*> builders;
 vector<Declarations*> globaldec;
@@ -40,13 +40,29 @@ IRBuilder<>* topb()
 	return builders.top();
 }
 
+Type* findconttype(Ident* id)
+{
+	for(int i = globaldec.size()-1; i >=0; i--){
+		for(int j = globaldec[i]->vec.size()-1; j >= 0; j--){
+			if(typeid(*(globaldec[i]->vec[j])) == typeid(arrayType)) {
+					arrayType* t = (arrayType*)globaldec[i]->vec[j];
+					if(t->id->s() == id->s()) return t->contentType;
+			}
+		}
+	}
+	return 0;
+}
+
 Type* findtype(Ident* id)
 {
 	for(int i = globaldec.size()-1; i >=0; i--){
 		for(int j = globaldec[i]->vec.size()-1; j >= 0; j--){
-			if(typeid(*(globaldec[i]->vec[j])) == typeid(typeDec)){
-				typeDec* t = (typeDec*)globaldec[i]->vec[j];
-				if(t->id->s() == id->s()) return t->type;
+			if(typeid(*(globaldec[i]->vec[j])) == typeid(typeDec) ||
+				typeid(*(globaldec[i]->vec[j])) == typeid(aliasType) ||
+				typeid(*(globaldec[i]->vec[j])) == typeid(arrayType) ||
+				typeid(*(globaldec[i]->vec[j])) == typeid(structType)) {
+					typeDec* t = (typeDec*)globaldec[i]->vec[j];
+					if(t->id->s() == id->s()) return t->type;
 			}
 		}
 	}
@@ -107,6 +123,8 @@ void aliasType::gen()
 void arrayType::gen()
 {
 	if (CODEGENDEBUG == 1) cerr << "Generating code for " << typeid(*this).name() << endl;
+	type = PointerType::get(findtype(content), 0);
+	contentType = findtype(content);
 }
 
 void typeField::gen()
@@ -130,8 +148,8 @@ void Declarations::gen()
 	Declarations* decblk = new Declarations;
 	globaldec.push_back(decblk);
 	for(int i = 0; i < vec.size(); i++){
-		vec[i]->gen();
 		decblk->add(vec[i]);
+		vec[i]->gen();
 	}
 	if (CODEGENDEBUG == 1) cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
@@ -178,7 +196,7 @@ void funcDec::gen()
 	for (ait = f->arg_begin(), i = 0; ait != f->arg_end(); ait++, i++) {
 		Expression* argValue = new Expression;
 		argValue->v = ait;
-		argDec->add(new Variable(params->vec[i]->id, argValue));
+		argDec->add(new Variable(params->vec[i]->id, params->vec[i]->type, argValue));
 	}
 	argDec->gen();
 	exp->gen();
@@ -197,7 +215,7 @@ void Variable::gen()
 	if(type) vartype = findtype(type);
 	else vartype = Type::getInt32Ty(getGlobalContext());
 	v = b->CreateAlloca(vartype, 0, id->s());
-	b->CreateStore(exp->v, v);
+	if(exp->v) b->CreateStore(exp->v, v);
 	if (CODEGENDEBUG == 1) cerr << "Generating code for " << typeid(*this).name() << " done" << endl;
 }
 
@@ -213,8 +231,7 @@ void Program::gen()
 	funcDec* printDec = new funcDec(new Ident("print"), 0, new Expression);
 	printDec->f = createPrintfFunction();
 	typedecs->add(printDec);
-	typeDec* inttype = new typeDec;
-	inttype->id = new Ident(string("int"));
+	typeDec* inttype = new typeDec(new Ident(string("int")));
 	inttype->type = Type::getInt32Ty(getGlobalContext());
 	typedecs->add(inttype);
 	globaldec.push_back(typedecs);
@@ -235,6 +252,7 @@ void constValue::gen()
 void nullConstant::gen()
 {
 	if (CODEGENDEBUG == 1) cerr << "Generating code for " << typeid(*this).name() << endl;
+	v = 0;
 }
 
 void intConstant::gen()
@@ -349,6 +367,28 @@ void ifelseBlock::gen()
 void forBlock::gen()
 {
 	if (CODEGENDEBUG == 1) cerr << "Generating code for " << typeid(*this).name() << endl;
+	IRBuilder<>* b = topb();
+	Function *TheFunction = b->GetInsertBlock()->getParent();
+	Declarations* argDec = new Declarations;
+	loopFrom->gen();
+	Variable* loopVar = new Variable(id, new Ident("int"), loopFrom);
+	argDec->add(loopVar);
+	argDec->gen();
+	BasicBlock *LoopBB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
+	BasicBlock *CondBB = BasicBlock::Create(getGlobalContext(), "cond", TheFunction);
+	b->CreateBr(CondBB);
+	b->SetInsertPoint(LoopBB);
+	loopBlock->gen();
+	Value* newv = b->CreateAdd(b->CreateLoad(loopVar->v), ConstantInt::get(Type::getInt32Ty(getGlobalContext()), 1, true));
+	b->CreateStore(newv, loopVar->v);
+	b->CreateBr(CondBB);
+	b->SetInsertPoint(CondBB);
+	loopTo->gen();
+	Value* EndCond = b->CreateICmpSLE(b->CreateLoad(loopVar->v), loopTo->v);
+	BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
+	b->CreateCondBr(EndCond, LoopBB, AfterBB);
+	b->SetInsertPoint(AfterBB);
+	globaldec.pop_back();
 }
 
 void whileBlock::gen()
@@ -410,11 +450,14 @@ void functionCaller::gen()
 void arrayOperator::gen()
 {
 	if (CODEGENDEBUG == 1) cerr << "Generating code for " << typeid(*this).name() << endl;
+	exp->gen();
+	v = exp->v;
 }
 
 void arrayOperators::gen()
 {
 	if (CODEGENDEBUG == 1) cerr << "Generating code for " << typeid(*this).name() << endl;
+	for(int i = 0; i < vec.size(); i++) vec[i]->gen();
 }
 
 void structField::gen()
@@ -435,11 +478,27 @@ void structConstant::gen()
 void arrayLvalue::gen()
 {
 	if (CODEGENDEBUG == 1) cerr << "Generating code for " << typeid(*this).name() << endl;
+	IRBuilder<>* b = topb();
+	id->gen();
+	arr->gen();
+	vector<Value*> val;
+	lv = id->lv;
+	v = b->CreateLoad(lv);
+	for(int i = 0; i < arr->vec.size(); i++){
+		val.clear();
+		val.push_back(arr->vec[i]->v);
+		lv = GetElementPtrInst::Create(v, makeArrayRef(val), "", b->GetInsertBlock());
+		v = b->CreateLoad(lv);
+	}
 }
 
 void arrayConstant::gen()
 {
 	if (CODEGENDEBUG == 1) cerr << "Generating code for " << typeid(*this).name() << endl;
+	size->gen();
+	exp->gen();
+	IRBuilder<>* b = topb();
+	v = new AllocaInst(findconttype(type), size->vec[0]->v, "", b->GetInsertBlock());
 }
 
 void varLvalue::gen()

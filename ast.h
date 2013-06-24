@@ -56,24 +56,22 @@ struct typeDec : public Declaration
 {
 	Ident* id;
 	Type* type;
+	typeDec(Ident* _id) : id(_id) {}
 	virtual void gen();
 };
 
 struct aliasType : public typeDec
 {
-	Ident* id;
 	Ident* content;
-	Type* type;
-	aliasType(Ident* _id, Ident* _content) : id(_id), content(_content) {}
+	aliasType(Ident* _id, Ident* _content) : typeDec(_id), content(_content) {}
 	virtual void gen();
 };
 
 struct arrayType : public typeDec
 {
-	Ident* id;
 	Ident* content;
-	Type* type;
-	arrayType(Ident* _id, Ident* _content) : id(_id), content(_content) {}
+	Type* contentType;
+	arrayType(Ident* _id, Ident* _content) : typeDec(_id), content(_content) {}
 	virtual void gen();
 };
 
@@ -94,10 +92,9 @@ struct typeFields : public node
 
 struct structType : public typeDec
 {
-	Ident* id;
 	typeFields* fields;
 	Type* type;
-	structType(Ident* _id, typeFields* _fields) : id(_id), fields(_fields) {}
+	structType(Ident* _id, typeFields* _fields) : typeDec(_id), fields(_fields) {}
 	virtual void gen();
 };
 
@@ -282,14 +279,15 @@ struct functionCaller : public Expression
 	virtual void gen();
 };
 
-struct arrayOperator : public leftValue
+struct arrayOperator : public node
 {
+	Value* v;
 	Expression* exp;
 	arrayOperator(Expression* _exp) : exp(_exp) {} 
 	virtual void gen();
 };
 
-struct arrayOperators : public leftValue
+struct arrayOperators : public node
 {
 	vector<arrayOperator*> vec;
 	void add(arrayOperator* s) { vec.push_back(s); }

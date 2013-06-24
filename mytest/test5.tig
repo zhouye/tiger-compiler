@@ -1,0 +1,41 @@
+let
+type intarr1 = array of int
+type intarr2 = array of intarr1
+var a := 8
+var b := 1
+var arr : intarr1 := intarr1[10] of nil
+var arr2 : intarr2 := intarr2[10] of nil
+function g (a : intarr1, b : int) = (
+	if b=1 then (
+		a[1]:=1; a[1]
+	)else (
+		g(a, b-1);
+		a[b]:=a[b-1]*b; a[b]
+	);
+	nil
+)
+function f (a : int) : int = (
+	if a=1 then 1
+	else f(a-1)*a
+)
+in
+	for a:=2 to 7 do b:=b*a;
+	print("%d %d
+", f(a), b);
+	for i:=0 to 9 do (
+		arr2[i] := intarr1[10] of nil;
+		for j:=0 to 9 do (
+			arr2[i][j] := i*10+j
+		)
+	);
+	for i:=0 to 9 do print("%d ", arr2[i][0]);
+	print("
+");
+	g(arr,9);
+	for i:=1 to 9 do print("%d ", arr[i]);
+	print("
+");
+	for i:=0 to 9 do arr[i]:=i+i;
+	for i:=0 to 9 do print("%d ", arr[i]);
+	0
+end
