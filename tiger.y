@@ -8,12 +8,14 @@ extern Program* root;
 int yylex();
 extern int lineno;
 extern char *yytext;
+extern int status;
 
 /* parse error */
 void yyerror ( const char* s ) {
 	printf("%s in line %d at '%s'\n", s,
          lineno , yytext);
-	exit(1);
+	//exit(1);
+	status = 0;
 }
 
 %}
@@ -99,6 +101,7 @@ dec			: TYPE id EQ id { $$ = new aliasType($2, $4); }
 			| vardec { $$ = $1; }
 			| FUNCTION id LPAREN tyfields RPAREN EQ exp { $$ = new funcDec($2, $4, $7); }
 			| FUNCTION id LPAREN tyfields RPAREN COLON id EQ exp { $$ = new funcDec($2, $4, $7, $9); }
+			| error { yyerror("Invalid declarartion"); $$ = new Declaration; }
 			;
 vardec		: VAR id ASSIGN exp { $$ = new Variable($2, $4); }
 			| VAR id COLON id ASSIGN exp { $$ = new Variable($2, $4, $6); }
@@ -109,7 +112,7 @@ tyfields	: { $$ = new typeFields; }
 			;
 id			: ID { $$ = new Ident(string(yytext)); }
 			;
-exp			: NIL { $$ = new nullConstant; }
+exp	        : NIL { $$ = new nullConstant; }
 			| INTEGERT { $$ = new intConstant(atoi(yytext)); }
 			| STRINGT { string s = yytext; $$ = new stringConstant(s.substr(1, s.length()-2)); }
 			| lvalue { $$ = $1; }
@@ -137,6 +140,8 @@ exp			: NIL { $$ = new nullConstant; }
 			| FOR id ASSIGN exp TO exp DO exp %prec HIGHER_THAN_OP { $$ = new forBlock($2, $4, $6, $8); }
 			| BREAK { $$ = new breakLoop; }
 			| LET decs IN exps END { $$ = new expBlock($2, $4); }
+			| ERROR { $$ = new nullConstant; }
+			| error { yyerror("Invalid expression");$$ = new nullConstant; }
 			;
 
 %%

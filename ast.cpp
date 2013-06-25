@@ -50,6 +50,7 @@ Type* findconttype(Ident* id)
 			}
 		}
 	}
+	throw string("ContentType Not Found.");
 	return 0;
 }
 
@@ -66,6 +67,7 @@ Type* findtype(Ident* id)
 			}
 		}
 	}
+	throw string("Type Not Found.");
 	return 0;
 }
 
@@ -79,6 +81,7 @@ Value* findvar(Ident* id)
 			}
 		}
 	}
+	throw string("Identifier Not Found.");
 	return 0;
 }
 
@@ -92,6 +95,7 @@ Function* findfunc(Ident* id)
 			}
 		}
 	}
+	throw string("Function Not Found");
 	return 0;
 }
 

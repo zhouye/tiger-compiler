@@ -9,6 +9,7 @@
 using namespace std;
 int lineno = 1;
 Program* root; 
+int status = 1;
 extern void yyrestart(FILE*);
 
 int main(int argc, char* argv[])
@@ -18,8 +19,15 @@ int main(int argc, char* argv[])
 		yyrestart(f);
 	}
 	yyparse();
+	if (status) {
 	InitializeNativeTarget();
-	root->gen();
+	try{
+		root->gen();
+	}
+	catch (string &e){
+		cout<<e<<"\n";
+		exit(1);
+	}
 	PassManager pm;
 	string s;
 	raw_string_ostream* ost = new raw_string_ostream(s);
@@ -43,4 +51,5 @@ int main(int argc, char* argv[])
 	GenericValue v = ee->runFunction(root->mainFunc, noargs);
 	cout << endl;
 	//cout << endl << v.IntVal.getSExtValue() << endl; 
+	}
 }
