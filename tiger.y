@@ -109,7 +109,8 @@ ty			: id { $$ = $1; }
 			| LBRACE tyfields RBRACE { $$ = $2; }
 			| ARRAY OF id { $$ = new node("arrayof"); $$->add($3); }
 			;
-tyfields	: id COLON id { $$ = new node("fields"); Tyfields n = new node("type"); n->add($1); n->add($3); $$->add(n); }
+tyfields	: { $$ = new node("fields"); }
+            | id COLON id { $$ = new node("fields"); Tyfields n = new node("type"); n->add($1); n->add($3); $$->add(n); }
 			| tyfields COMMA id COLON id { $$ = $1; Tyfields n = new node("type"); n->add($3); n->add($5); $$->add(n); }
 			;
 id			: ID { $$ = new node(yytext); }
